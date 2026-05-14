@@ -19,6 +19,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'novel-app-default'; 
+const getDummyEmail = (qq) => `${qq}@qcym.library.local`;
 
 const Toast = ({ message, type = 'info', onClose }) => {
   useEffect(() => {
@@ -34,213 +35,128 @@ const Toast = ({ message, type = 'info', onClose }) => {
   );
 };
 
-// 核心应用逻辑组件
-function NovelAppContent() {
+// ======================== 全局主题与样式 ========================
+const themeStyles = {
+  'blue-white': {
+    app: 'bg-slate-50 text-slate-900 selection:bg-blue-100 selection:text-blue-900',
+    nav: 'bg-white border-b border-slate-200 shadow-sm',
+    navLogo: 'text-white bg-blue-600',
+    navText: 'text-slate-900',
+    navItem: 'text-slate-600 hover:bg-slate-100',
+    navItemActive: 'bg-blue-50 text-blue-700',
+    navDivider: 'bg-slate-200',
+    card: 'bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all',
+    cardStatic: 'bg-white border border-slate-100 shadow-sm',
+    text: 'text-slate-900',
+    textMuted: 'text-slate-500',
+    textLight: 'text-slate-400',
+    heading: 'text-slate-800',
+    primaryBtn: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+    secondaryBtn: 'bg-slate-200 hover:bg-slate-300 text-slate-800',
+    outlineBtn: 'border border-blue-600 text-blue-600 hover:bg-blue-50',
+    ghostBtn: 'text-slate-600 hover:bg-slate-100',
+    dangerBtn: 'bg-red-500 hover:bg-red-600 text-white',
+    input: 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500 text-slate-900',
+    iconBg: 'bg-blue-100 text-blue-600',
+    accent: 'text-blue-600',
+    tag: 'bg-blue-50 text-blue-700 hover:bg-blue-100',
+    tagBadge: 'bg-white text-blue-500 group-hover:text-blue-700',
+    border: 'border-slate-100',
+    borderLight: 'border-slate-50',
+    readBg: 'bg-[#f8f9fa]',
+    readPaper: 'bg-white border border-slate-200',
+    readText: 'text-slate-800',
+    commentBg: 'bg-slate-50',
+    synopsisBg: 'bg-blue-50 border-l-4 border-blue-500 text-slate-800'
+  },
+  'dark-gold': {
+    app: 'bg-[#121212] text-gray-200 selection:bg-[#d4af37] selection:text-black',
+    nav: 'bg-[#1a1a1a] border-b border-[#333] shadow-md',
+    navLogo: 'text-black bg-[#d4af37]',
+    navText: 'text-[#d4af37]',
+    navItem: 'text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-200',
+    navItemActive: 'bg-[#2a2410] text-[#d4af37]',
+    navDivider: 'bg-[#333]',
+    card: 'bg-[#1e1e1e] border border-[#333] shadow-sm hover:shadow-md hover:border-[#444] transition-all',
+    cardStatic: 'bg-[#1e1e1e] border border-[#333] shadow-sm',
+    text: 'text-gray-100',
+    textMuted: 'text-gray-400',
+    textLight: 'text-gray-500',
+    heading: 'text-gray-100',
+    primaryBtn: 'bg-[#d4af37] hover:bg-[#b5952f] text-black shadow-sm font-bold',
+    secondaryBtn: 'bg-[#333] hover:bg-[#444] text-gray-200',
+    outlineBtn: 'border border-[#d4af37] text-[#d4af37] hover:bg-[#2a2410]',
+    ghostBtn: 'text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-200',
+    dangerBtn: 'bg-red-900 hover:bg-red-800 text-white',
+    input: 'bg-[#2a2a2a] border border-[#444] focus:ring-2 focus:ring-[#d4af37] text-gray-100 placeholder-gray-500',
+    iconBg: 'bg-[#2a2410] text-[#d4af37]',
+    accent: 'text-[#d4af37]',
+    tag: 'bg-[#2a2410] text-[#d4af37] hover:bg-[#3d3418]',
+    tagBadge: 'bg-[#1a1a1a] text-[#d4af37] group-hover:text-[#f1c40f]',
+    border: 'border-[#333]',
+    borderLight: 'border-[#222]',
+    readBg: 'bg-[#0a0a0a]',
+    readPaper: 'bg-[#161616] border border-[#333]',
+    readText: 'text-gray-300',
+    commentBg: 'bg-[#222]',
+    synopsisBg: 'bg-[#1e1a0f] border-l-4 border-[#d4af37] text-gray-300'
+  }
+};
+
+const BaseButton = ({ children, onClick, variant = 'primary', className = '', disabled = false, icon: Icon, type = "button", title, t }) => {
+  const baseStyle = "px-4 py-2 rounded-md font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants = { primary: t.primaryBtn, secondary: t.secondaryBtn, outline: t.outlineBtn, ghost: t.ghostBtn, danger: t.dangerBtn };
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} title={title} className={`${baseStyle} ${variants[variant]} ${className}`}>
+      {Icon && <Icon size={18} />}
+      {children}
+    </button>
+  );
+};
+
+
+// ======================== 独立视图组件 ========================
+
+const AuthView = ({ t, Button, showToast, user, isLoading }) => {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState({ name: '访客', favorites: [] });
-  const [novels, setNovels] = useState([]);
-  
-  // 切换路由时自动回到顶部
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
-
-  // Advanced Filters State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('time'); 
-  const [filterIncludeTag, setFilterIncludeTag] = useState('');
-  const [filterExcludeTag, setFilterExcludeTag] = useState('');
-  const [minWords, setMinWords] = useState('');
-  const [maxWords, setMaxWords] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 20;
-
-  // UI State
-  const [toast, setToast] = useState(null);
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Profile Edit State
-  const [editName, setEditName] = useState('');
-
-  // Auth State
   const [authMode, setAuthMode] = useState('login'); 
   const [authQQ, setAuthQQ] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const showToast = (message, type = 'info') => setToast({ message, type });
-
-  // Theme Management
-  const [theme, setTheme] = useState('blue-white');
-  const themeStyles = {
-    'blue-white': {
-      app: 'bg-slate-50 text-slate-900 selection:bg-blue-100 selection:text-blue-900',
-      nav: 'bg-white border-b border-slate-200 shadow-sm',
-      navLogo: 'text-white bg-blue-600',
-      navText: 'text-slate-900',
-      navItem: 'text-slate-600 hover:bg-slate-100',
-      navItemActive: 'bg-blue-50 text-blue-700',
-      navDivider: 'bg-slate-200',
-      card: 'bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all',
-      cardStatic: 'bg-white border border-slate-100 shadow-sm',
-      text: 'text-slate-900',
-      textMuted: 'text-slate-500',
-      textLight: 'text-slate-400',
-      heading: 'text-slate-800',
-      primaryBtn: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
-      secondaryBtn: 'bg-slate-200 hover:bg-slate-300 text-slate-800',
-      outlineBtn: 'border border-blue-600 text-blue-600 hover:bg-blue-50',
-      ghostBtn: 'text-slate-600 hover:bg-slate-100',
-      dangerBtn: 'bg-red-500 hover:bg-red-600 text-white',
-      input: 'bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500 text-slate-900',
-      iconBg: 'bg-blue-100 text-blue-600',
-      accent: 'text-blue-600',
-      tag: 'bg-blue-50 text-blue-700 hover:bg-blue-100',
-      tagBadge: 'bg-white text-blue-500 group-hover:text-blue-700',
-      border: 'border-slate-100',
-      borderLight: 'border-slate-50',
-      readBg: 'bg-[#f8f9fa]',
-      readPaper: 'bg-white border border-slate-200',
-      readText: 'text-slate-800',
-      commentBg: 'bg-slate-50',
-      synopsisBg: 'bg-blue-50 border-l-4 border-blue-500 text-slate-800'
-    },
-    'dark-gold': {
-      app: 'bg-[#121212] text-gray-200 selection:bg-[#d4af37] selection:text-black',
-      nav: 'bg-[#1a1a1a] border-b border-[#333] shadow-md',
-      navLogo: 'text-black bg-[#d4af37]',
-      navText: 'text-[#d4af37]',
-      navItem: 'text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-200',
-      navItemActive: 'bg-[#2a2410] text-[#d4af37]',
-      navDivider: 'bg-[#333]',
-      card: 'bg-[#1e1e1e] border border-[#333] shadow-sm hover:shadow-md hover:border-[#444] transition-all',
-      cardStatic: 'bg-[#1e1e1e] border border-[#333] shadow-sm',
-      text: 'text-gray-100',
-      textMuted: 'text-gray-400',
-      textLight: 'text-gray-500',
-      heading: 'text-gray-100',
-      primaryBtn: 'bg-[#d4af37] hover:bg-[#b5952f] text-black shadow-sm font-bold',
-      secondaryBtn: 'bg-[#333] hover:bg-[#444] text-gray-200',
-      outlineBtn: 'border border-[#d4af37] text-[#d4af37] hover:bg-[#2a2410]',
-      ghostBtn: 'text-gray-400 hover:bg-[#2a2a2a] hover:text-gray-200',
-      dangerBtn: 'bg-red-900 hover:bg-red-800 text-white',
-      input: 'bg-[#2a2a2a] border border-[#444] focus:ring-2 focus:ring-[#d4af37] text-gray-100 placeholder-gray-500',
-      iconBg: 'bg-[#2a2410] text-[#d4af37]',
-      accent: 'text-[#d4af37]',
-      tag: 'bg-[#2a2410] text-[#d4af37] hover:bg-[#3d3418]',
-      tagBadge: 'bg-[#1a1a1a] text-[#d4af37] group-hover:text-[#f1c40f]',
-      border: 'border-[#333]',
-      borderLight: 'border-[#222]',
-      readBg: 'bg-[#0a0a0a]',
-      readPaper: 'bg-[#161616] border border-[#333]',
-      readText: 'text-gray-300',
-      commentBg: 'bg-[#222]',
-      synopsisBg: 'bg-[#1e1a0f] border-l-4 border-[#d4af37] text-gray-300'
-    }
-  };
-  const t = themeStyles[theme];
-
-  const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, icon: Icon, type = "button", title }) => {
-    const baseStyle = "px-4 py-2 rounded-md font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
-    const variants = {
-      primary: t.primaryBtn,
-      secondary: t.secondaryBtn,
-      outline: t.outlineBtn,
-      ghost: t.ghostBtn,
-      danger: t.dangerBtn
-    };
-    return (
-      <button type={type} onClick={onClick} disabled={disabled} title={title} className={`${baseStyle} ${variants[variant]} ${className}`}>
-        {Icon && <Icon size={18} />}
-        {children}
-      </button>
-    );
-  };
-
+  // 如果验证完发现用户已登录，自动跳转回首页，防止重复登录
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        setUserProfile({ name: '访客', favorites: [], isRegistered: false });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const novelsRef = collection(db, 'artifacts', appId, 'public', 'data', 'novels');
-    const unsubscribeNovels = onSnapshot(novelsRef, (snapshot) => {
-      const novelsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setNovels(novelsData);
-    }, (error) => {
-      console.error("Error fetching novels:", error);
-    });
-
-    let unsubscribeProfile = () => {};
-    if (user) {
-      const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data');
-      unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setUserProfile(data);
-          setEditName(data.name);
-        }
-      });
+    if (!isLoading && user) {
+      navigate('/');
     }
-
-    return () => {
-      unsubscribeNovels();
-      unsubscribeProfile();
-    };
-  }, [user]);
-
-  const getDummyEmail = (qq) => `${qq}@qcym.library.local`;
+  }, [user, isLoading, navigate]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     const qq = authQQ.trim();
     const pwd = authPassword.trim();
     const name = authName.trim();
-
-    if (!qq || !pwd) {
-      showToast("请输入QQ号和密码！", "error");
-      return;
-    }
+    if (!qq || !pwd) return showToast("请输入QQ号和密码！", "error");
 
     setIsAuthenticating(true);
     try {
       if (authMode === 'register') {
         if (!name) throw new Error("请输入昵称");
-        
         const whitelistRef = doc(db, 'artifacts', appId, 'whitelist', 'data', 'allowed_qqs', qq);
         const whitelistSnap = await getDoc(whitelistRef);
-        if (!whitelistSnap.exists()) {
-          throw new Error("该QQ号不在系统白名单中，请联系管理员！");
-        }
+        if (!whitelistSnap.exists()) throw new Error("该QQ号不在系统白名单中，请联系管理员！");
 
         const qqRef = doc(db, 'artifacts', appId, 'public', 'data', 'registered_qqs', qq);
         const qqSnap = await getDoc(qqRef);
-        if (qqSnap.exists()) {
-          throw new Error("该QQ号已被注册，请直接登录！");
-        }
+        if (qqSnap.exists()) throw new Error("该QQ号已被注册，请直接登录！");
 
         const userCred = await createUserWithEmailAndPassword(auth, getDummyEmail(qq), pwd);
-        
         await setDoc(qqRef, { uid: userCred.user.uid, timestamp: Date.now() });
         const profileRef = doc(db, 'artifacts', appId, 'users', userCred.user.uid, 'profile', 'data');
-        await setDoc(profileRef, { 
-          qq: qq,
-          name: name,
-          favorites: [],
-          isRegistered: true 
-        });
+        await setDoc(profileRef, { qq: qq, name: name, favorites: [], isRegistered: true });
         showToast("注册成功，欢迎加入！", "success");
         navigate('/');
-
       } else {
         await signInWithEmailAndPassword(auth, getDummyEmail(qq), pwd);
         showToast("登录成功！", "success");
@@ -256,113 +172,7 @@ function NovelAppContent() {
     setIsAuthenticating(false);
   };
 
-  const handleLogout = () => {
-    signOut(auth);
-    showToast("已退出登录", "success");
-    navigate('/');
-  };
-
-  const updateUsername = async (newName) => {
-    if (!user || !newName.trim()) return;
-    try {
-      const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data');
-      await updateDoc(profileRef, { name: newName });
-      showToast("昵称更新成功！", "success");
-    } catch (err) {
-      showToast("更新失败", "error");
-    }
-  };
-
-  const toggleFavorite = async (novelId) => {
-    if (!user || !userProfile.isRegistered) {
-      showToast("请先登录账号", "error");
-      navigate('/auth');
-      return;
-    }
-    try {
-      const isFav = userProfile.favorites?.includes(novelId);
-      const newFavs = isFav 
-        ? userProfile.favorites.filter(id => id !== novelId)
-        : [...(userProfile.favorites || []), novelId];
-        
-      const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data');
-      await updateDoc(profileRef, { favorites: newFavs });
-
-      const novelRef = doc(db, 'artifacts', appId, 'public', 'data', 'novels', novelId);
-      await updateDoc(novelRef, { favoritesCount: increment(isFav ? -1 : 1) });
-
-      showToast(isFav ? "已取消收藏" : "收藏成功！", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("操作失败", "error");
-    }
-  };
-
-  const downloadTxt = (novel) => {
-    try {
-      const blob = new Blob([novel.content], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${novel.title}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast("开始下载...", "success");
-    } catch (err) {
-      showToast("下载失败", "error");
-    }
-  };
-
-  const processedNovels = useMemo(() => {
-    let result = [...novels];
-
-    if (searchQuery) {
-      const lowerQ = searchQuery.toLowerCase();
-      result = result.filter(n => 
-        n.title.toLowerCase().includes(lowerQ) || 
-        n.genre.toLowerCase().includes(lowerQ) ||
-        (n.tags && n.tags.some(tag => tag.text.toLowerCase().includes(lowerQ))) ||
-        (n.synopsis && n.synopsis.toLowerCase().includes(lowerQ))
-      );
-    }
-
-    if (filterIncludeTag.trim()) {
-      const inc = filterIncludeTag.trim().toLowerCase();
-      result = result.filter(n => n.tags?.some(t => t.text.toLowerCase().includes(inc)));
-    }
-    if (filterExcludeTag.trim()) {
-      const exc = filterExcludeTag.trim().toLowerCase();
-      result = result.filter(n => !n.tags?.some(t => t.text.toLowerCase().includes(exc)));
-    }
-
-    if (minWords) {
-      result = result.filter(n => (n.content?.length || 0) >= parseInt(minWords));
-    }
-    if (maxWords) {
-      result = result.filter(n => (n.content?.length || 0) <= parseInt(maxWords));
-    }
-
-    result.sort((a, b) => {
-      if (sortBy === 'comments') return (b.comments?.length || 0) - (a.comments?.length || 0);
-      if (sortBy === 'favorites') return (b.favoritesCount || 0) - (a.favoritesCount || 0);
-      return b.uploadDate - a.uploadDate;
-    });
-
-    return result;
-  }, [novels, searchQuery, filterIncludeTag, filterExcludeTag, minWords, maxWords, sortBy]);
-
-  const paginatedNovels = processedNovels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalPages = Math.max(1, Math.ceil(processedNovels.length / ITEMS_PER_PAGE));
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, filterIncludeTag, filterExcludeTag, minWords, maxWords, sortBy]);
-
-  // =============== 视图组件 ===============
-
-  const AuthView = () => (
+  return (
     <div className="max-w-md mx-auto p-6 mt-20 animate-in fade-in">
       <div className={`p-8 rounded-2xl shadow-sm ${t.cardStatic}`}>
         <h2 className={`text-2xl font-bold mb-2 ${t.heading}`}>{authMode === 'login' ? '账号登录' : '登记与注册'}</h2>
@@ -395,8 +205,193 @@ function NovelAppContent() {
       </div>
     </div>
   );
+};
 
-  const HomeView = () => (
+const UploadEditView = ({ t, theme, Button, showToast, user, userProfile, novels, isLoading }) => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEditMode = !!id;
+
+  const [uTitle, setUTitle] = useState('');
+  const [uGenre, setUGenre] = useState('短篇');
+  const [uAuthor, setUAuthor] = useState('');
+  const [uSeries, setUSeries] = useState('');
+  const [uSynopsis, setUSynopsis] = useState('');
+  const [uContent, setUContent] = useState('');
+  const [uFileName, setUFileName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 1. 所有的 Hook 必须放在组件的最顶部（这是之前报错的根源）
+  useEffect(() => {
+    if (isEditMode && novels.length > 0) {
+      const novel = novels.find(n => n.id === id);
+      if (novel && user && novel.uploaderId === user.uid) {
+        setUTitle(novel.title || '');
+        setUGenre(novel.genre || '短篇');
+        setUAuthor(novel.author || userProfile?.name || '');
+        setUSeries(novel.series || '');
+        setUSynopsis(novel.synopsis || '');
+        setUContent(novel.content || '');
+      } else if (novel && user) {
+        showToast("无权编辑他人的作品", "error");
+        navigate('/profile');
+      }
+    } else if (!isEditMode && !uAuthor && userProfile?.name) {
+      setUAuthor(userProfile.name);
+    }
+  }, [isEditMode, id, novels, userProfile, user, navigate, showToast, uAuthor]);
+
+  // 2. 数据加载和鉴权拦截，必须放在 Hook 的下方
+  if (isLoading) {
+    return <div className="text-center py-32 text-slate-500 animate-pulse font-medium">身份验证与数据同步中...</div>;
+  }
+
+  if (!user || !userProfile?.isRegistered) {
+    return <Navigate to="/auth" />;
+  }
+
+  // 3. 事件处理函数
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 1048576) return showToast("文件过大！请上传小于 1MB 的文本文件。", "error");
+    setUFileName(file.name);
+    if (!isEditMode) setUTitle(file.name.replace(/\.[^/.]+$/, ""));
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setUContent(event.target.result);
+      showToast("文件读取成功，可继续编辑排版", "success");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!uTitle.trim() || !uAuthor.trim() || !uContent.trim()) return showToast("请填写完整的标题、作者及正文内容", "error");
+    setIsSubmitting(true);
+    try {
+      if (isEditMode) {
+        const novelDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'novels', id);
+        await updateDoc(novelDocRef, {
+          title: uTitle.trim(), genre: uGenre, author: uAuthor.trim(), series: uSeries.trim(), synopsis: uSynopsis.trim(), content: uContent
+        });
+        showToast("作品修改保存成功！", "success");
+        navigate('/profile');
+      } else {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'novels'), {
+          title: uTitle.trim(), genre: uGenre, author: uAuthor.trim(), series: uSeries.trim(), synopsis: uSynopsis.trim(), content: uContent,
+          uploadDate: Date.now(), uploaderId: user.uid, uploaderName: userProfile.name, favoritesCount: 0, tags: [], comments: []
+        });
+        showToast("上传发布成功！", "success");
+        navigate('/');
+      }
+    } catch (err) {
+      showToast(isEditMode ? "修改失败" : "上传失败", "error");
+    }
+    setIsSubmitting(false);
+  };
+
+  // 4. 渲染界面
+  return (
+    <div className="max-w-4xl mx-auto p-6 mt-6">
+      <div className={`p-8 rounded-2xl animate-in fade-in ${t.cardStatic}`}>
+        <div className={`flex items-center gap-3 mb-8 pb-6 border-b ${t.border}`}>
+          <div className={`p-3 rounded-full ${t.iconBg}`}>{isEditMode ? <Edit size={24} /> : <Upload size={24} />}</div>
+          <div>
+            <h2 className={`text-2xl font-bold ${t.heading}`}>{isEditMode ? "编辑作品" : "发布作品"}</h2>
+            <p className={`text-sm mt-1 ${t.textMuted}`}>{isEditMode ? "修改你已经上传的作品信息与正文内容" : "直接复制文本撰写，或上传 TXT 后二次编辑"}</p>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${t.text}`}>作品书名 <span className="text-red-500">*</span></label>
+              <input required type="text" value={uTitle} onChange={(e) => setUTitle(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`} placeholder="请输入作品名称" />
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${t.text}`}>作者 <span className="text-red-500">*</span></label>
+              <input required type="text" value={uAuthor} onChange={(e) => setUAuthor(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`} placeholder="文章/小说的原作者" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${t.text}`}>作品类型</label>
+              <select value={uGenre} onChange={(e) => setUGenre(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`}>
+                <option>杂谈</option><option>短篇</option><option>连载</option>
+              </select>
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${t.text}`}>所属系列 (可选)</label>
+              <input type="text" value={uSeries} onChange={(e) => setUSeries(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`} placeholder="同系列作品会自动生成上下篇跳转" />
+            </div>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${t.text}`}>内容简介 (最多 500 字)</label>
+            <textarea maxLength={500} value={uSynopsis} onChange={(e) => setUSynopsis(e.target.value)} className={`w-full px-4 py-3 rounded-xl resize-none mb-1 ${t.input}`} rows="3" placeholder="简明扼要地介绍一下这部作品的情节、背景或亮点..."></textarea>
+            <div className={`text-right text-xs ${t.textLight}`}>{uSynopsis.length} / 500</div>
+          </div>
+          <div className={`p-5 rounded-xl border ${t.border} ${theme === 'dark-gold' ? 'bg-[#1a1a1a]' : 'bg-slate-50/50'}`}>
+            <div className="mb-6">
+              <label className={`block text-sm font-medium mb-2 ${t.text}`}>一键导入 TXT (可选)</label>
+              <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${t.border} ${theme === 'dark-gold' ? 'bg-[#222] hover:bg-[#2a2a2a]' : 'bg-white hover:bg-gray-50'}`}>
+                <div className="flex flex-col items-center justify-center">
+                  <p className={`mb-1 text-sm font-medium ${t.textMuted}`}>{uFileName ? `已选择：${uFileName} (点此可重新选择)` : "点击或拖拽 TXT 文件到此处覆盖内容"}</p>
+                  {!uFileName && <p className={`text-xs ${t.textLight}`}>上传后内容会自动填入下方输入框</p>}
+                </div>
+                <input type="file" className="hidden" accept=".txt" onChange={handleFileChange} />
+              </label>
+            </div>
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${t.text}`}>正文内容 <span className="text-red-500">*</span></label>
+              <textarea required value={uContent} onChange={(e) => setUContent(e.target.value)} className={`w-full px-4 py-3 rounded-xl resize-y min-h-[350px] font-serif leading-relaxed ${t.input}`} placeholder="粘贴/编写正文内容... 支持基础 HTML 标签。"></textarea>
+            </div>
+          </div>
+          <Button type="submit" variant="primary" className="w-full py-4 text-lg mt-4 font-bold" disabled={isSubmitting}>
+            {isSubmitting ? (isEditMode ? "正在保存..." : "正在发布至书架...") : (isEditMode ? "保存修改" : "确认发布")}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const HomeView = ({ t, Button, novels, userProfile, toggleFavorite }) => {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('time'); 
+  const [filterIncludeTag, setFilterIncludeTag] = useState('');
+  const [filterExcludeTag, setFilterExcludeTag] = useState('');
+  const [minWords, setMinWords] = useState('');
+  const [maxWords, setMaxWords] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showFilters, setShowFilters] = useState(false);
+  const ITEMS_PER_PAGE = 20;
+
+  const processedNovels = useMemo(() => {
+    let result = [...novels];
+    if (searchQuery) {
+      const lowerQ = searchQuery.toLowerCase();
+      result = result.filter(n => n.title.toLowerCase().includes(lowerQ) || n.genre.toLowerCase().includes(lowerQ) || (n.tags && n.tags.some(tag => tag.text.toLowerCase().includes(lowerQ))) || (n.synopsis && n.synopsis.toLowerCase().includes(lowerQ)));
+    }
+    if (filterIncludeTag.trim()) result = result.filter(n => n.tags?.some(t => t.text.toLowerCase().includes(filterIncludeTag.trim().toLowerCase())));
+    if (filterExcludeTag.trim()) result = result.filter(n => !n.tags?.some(t => t.text.toLowerCase().includes(filterExcludeTag.trim().toLowerCase())));
+    if (minWords) result = result.filter(n => (n.content?.length || 0) >= parseInt(minWords));
+    if (maxWords) result = result.filter(n => (n.content?.length || 0) <= parseInt(maxWords));
+
+    result.sort((a, b) => {
+      if (sortBy === 'comments') return (b.comments?.length || 0) - (a.comments?.length || 0);
+      if (sortBy === 'favorites') return (b.favoritesCount || 0) - (a.favoritesCount || 0);
+      return b.uploadDate - a.uploadDate;
+    });
+    return result;
+  }, [novels, searchQuery, filterIncludeTag, filterExcludeTag, minWords, maxWords, sortBy]);
+
+  const paginatedNovels = processedNovels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(processedNovels.length / ITEMS_PER_PAGE));
+
+  useEffect(() => setCurrentPage(1), [searchQuery, filterIncludeTag, filterExcludeTag, minWords, maxWords, sortBy]);
+
+  return (
     <div className="max-w-6xl mx-auto p-6 space-y-6 animate-in fade-in">
       <div className={`flex flex-col md:flex-row justify-between items-center gap-4 p-6 rounded-2xl ${t.cardStatic}`}>
         <div>
@@ -424,11 +419,11 @@ function NovelAppContent() {
           </div>
           <div>
             <label className={`block mb-1 font-medium ${t.textMuted}`}>包含标签</label>
-            <input type="text" placeholder="如: 训诫" value={filterIncludeTag} onChange={e => setFilterIncludeTag(e.target.value)} className={`w-28 px-3 py-2 rounded-lg ${t.input}`} />
+            <input type="text" placeholder="如: 科幻" value={filterIncludeTag} onChange={e => setFilterIncludeTag(e.target.value)} className={`w-28 px-3 py-2 rounded-lg ${t.input}`} />
           </div>
           <div>
             <label className={`block mb-1 font-medium ${t.textMuted}`}>排除标签</label>
-            <input type="text" placeholder="如: 清水" value={filterExcludeTag} onChange={e => setFilterExcludeTag(e.target.value)} className={`w-28 px-3 py-2 rounded-lg ${t.input}`} />
+            <input type="text" placeholder="如: 杂谈" value={filterExcludeTag} onChange={e => setFilterExcludeTag(e.target.value)} className={`w-28 px-3 py-2 rounded-lg ${t.input}`} />
           </div>
           <div className="flex items-end gap-2">
             <div>
@@ -464,7 +459,6 @@ function NovelAppContent() {
                 <h3 className={`text-xl font-bold mb-2 line-clamp-1 cursor-pointer transition-colors ${t.text} hover:${t.accent.split(' ')[0]}`} onClick={() => navigate(`/novel/${novel.id}`)}>
                   {novel.title}
                 </h3>
-
                 {novel.synopsis && <p className={`text-sm mb-3 line-clamp-2 ${t.textMuted}`}>{novel.synopsis}</p>}
                 
                 <div className={`flex flex-wrap gap-x-3 gap-y-1 mb-3 text-xs ${t.textMuted}`}>
@@ -501,358 +495,366 @@ function NovelAppContent() {
       )}
     </div>
   );
+};
 
-  const ReadView = () => {
-    const { id } = useParams();
-    const novel = novels.find(n => n.id === id);
+const ProfileView = ({ t, theme, Button, user, userProfile, novels, updateUsername, downloadTxt, toggleFavorite, isLoading }) => {
+  const navigate = useNavigate();
+  const [editName, setEditName] = useState('');
 
-    if (novels.length === 0) return <div className="text-center py-20">加载中...</div>;
-    if (!novel) return <div className="text-center py-20 text-red-500 font-bold">找不到该小说或已被删除</div>;
+  // 同步初始化昵称
+  useEffect(() => {
+    if (userProfile?.name) setEditName(userProfile.name);
+  }, [userProfile?.name]);
 
-    const isFav = userProfile.favorites?.includes(novel.id);
+  if (isLoading) {
+    return <div className="text-center py-32 text-slate-500 animate-pulse font-medium">身份验证与数据同步中...</div>;
+  }
 
-    let prevNovel = null;
-    let nextNovel = null;
-    if (novel.series) {
-      const seriesNovels = novels.filter(n => n.series === novel.series).sort((a, b) => a.uploadDate - b.uploadDate);
-      const currentIndex = seriesNovels.findIndex(n => n.id === novel.id);
-      if (currentIndex > 0) prevNovel = seriesNovels[currentIndex - 1];
-      if (currentIndex < seriesNovels.length - 1) nextNovel = seriesNovels[currentIndex + 1];
-    }
+  if (!user || !userProfile?.isRegistered) {
+    return <Navigate to="/auth" />;
+  }
 
-    const handleAddTag = async (e) => {
-      e.preventDefault();
-      await addTag(novel.id, e.target.tag.value);
-      e.target.reset();
-    };
+  const myFavNovels = novels.filter(n => userProfile.favorites?.includes(n.id));
+  const myUploads = novels.filter(n => n.uploaderId === user.uid);
 
-    const handleAddComment = async (e) => {
-      e.preventDefault();
-      await addComment(novel.id, e.target.comment.value);
-      e.target.reset();
-    };
-
-    const isHtml = /<(p|div|br|span|h[1-6]|b|i|strong|em)[^>]*>/i.test(novel.content);
-    let displayContent = novel.content;
-    if (!isHtml) {
-      displayContent = novel.content.split('\n').map(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return '<div class="h-4"></div>'; 
-        return `<p style="text-indent: 2em; margin-bottom: 0.5em;">${trimmed}</p>`;
-      }).join('');
-    }
-
-    return (
-      <div className={`min-h-screen ${t.readBg} pt-4 pb-10`}>
-        <div className="max-w-4xl mx-auto p-4 md:p-8 animate-in slide-in-from-bottom-8">
-          <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 -ml-4"><ChevronLeft size={20} /> 返回上一页</Button>
-
-          <div className={`p-8 md:p-12 rounded-2xl shadow-sm mb-8 ${t.readPaper}`}>
-            <div className={`text-center mb-10 pb-8 border-b ${t.border}`}>
-              <h1 className={`text-4xl font-black mb-4 tracking-tight ${t.heading}`}>{novel.title}</h1>
-              <div className={`flex flex-wrap items-center justify-center gap-4 text-sm ${t.textMuted}`}>
-                <span className="flex items-center gap-1"><User size={16} /> 作者: {novel.author || novel.uploaderName}</span>
-                {novel.series && <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded ${t.iconBg}`}><Layers size={14} /> 系列: {novel.series}</span>}
-                <span className="flex items-center gap-1"><Clock size={16} /> {new Date(novel.uploadDate).toLocaleString()}</span>
-                <span className={`px-3 py-1 rounded-full ${t.secondaryBtn.split(' ')[0]} ${t.text}`}>{novel.genre}</span>
-              </div>
-              <div className="mt-6 flex justify-center gap-4">
-                <Button variant={isFav ? "primary" : "outline"} onClick={() => toggleFavorite(novel.id)} icon={Heart}>{isFav ? "已收藏" : "收藏"}</Button>
-                <Button variant="outline" onClick={() => downloadTxt(novel)} icon={Download}>下载 TXT</Button>
-              </div>
-            </div>
-
-            {novel.synopsis && (
-              <div className={`mb-10 p-6 rounded-xl ${t.synopsisBg}`}>
-                <h4 className="font-bold mb-2 flex items-center gap-2"><AlignLeft size={16}/> 内容简介</h4>
-                <p className="text-[0.95rem] leading-relaxed whitespace-pre-wrap">{novel.synopsis}</p>
-              </div>
-            )}
-
-            <div className={`prose prose-lg max-w-none leading-loose font-serif ${t.readText} prose-p:indent-[2em] ${isHtml ? 'whitespace-pre-wrap' : ''}`} style={{ fontSize: '1.125rem' }} dangerouslySetInnerHTML={{ __html: displayContent }} />
-
-            {novel.series && (prevNovel || nextNovel) && (
-              <div className={`mt-12 pt-8 border-t flex justify-between items-center gap-4 ${t.border}`}>
-                {prevNovel ? (
-                  <Button variant="outline" onClick={() => navigate(`/novel/${prevNovel.id}`)} className="flex-1 max-w-[48%] justify-start overflow-hidden">
-                    <ChevronLeft size={18} className="flex-shrink-0" /><span className="truncate">上一篇: {prevNovel.title}</span>
-                  </Button>
-                ) : <div className="flex-1"></div>}
-                {nextNovel ? (
-                  <Button variant="outline" onClick={() => navigate(`/novel/${nextNovel.id}`)} className="flex-1 max-w-[48%] justify-end overflow-hidden">
-                    <span className="truncate">下一篇: {nextNovel.title}</span><ChevronRight size={18} className="flex-shrink-0" />
-                  </Button>
-                ) : <div className="flex-1"></div>}
-              </div>
-            )}
-          </div>
-
-          <div className={`p-6 rounded-2xl shadow-sm mb-8 ${t.cardStatic}`}>
-            <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${t.heading}`}><Tag className={t.accent} /> 小说标签</h3>
-            <div className="flex flex-wrap gap-3 mb-4">
-              {(novel.tags || []).map((tag, idx) => (
-                <button key={idx} onClick={() => upvoteTag(novel.id, idx)} className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${t.tag}`}>
-                  {tag.text} <span className={`px-1.5 rounded text-xs transition-colors ${t.tagBadge}`}>{tag.upvotes}</span><ThumbsUp size={12} className="opacity-50 group-hover:opacity-100" />
-                </button>
-              ))}
-            </div>
-            <form onSubmit={handleAddTag} className="flex gap-2">
-              <input type="text" name="tag" placeholder="添加新标签..." className={`flex-1 px-4 py-2 rounded-lg text-sm ${t.input}`} />
-              <Button type="submit" variant="secondary">添加</Button>
-            </form>
-          </div>
-
-          <div className={`p-6 rounded-2xl shadow-sm ${t.cardStatic}`}>
-            <h3 className={`text-lg font-bold mb-6 flex items-center gap-2 ${t.heading}`}><MessageSquare className={t.accent} /> 读者讨论 ({novel.comments?.length || 0})</h3>
-            <form onSubmit={handleAddComment} className="mb-8">
-              <textarea name="comment" rows="3" placeholder="写下你的读后感..." className={`w-full px-4 py-3 rounded-xl mb-3 resize-none ${t.input}`}></textarea>
-              <div className="flex justify-end"><Button type="submit" variant="primary">发布评论</Button></div>
-            </form>
-            <div className="space-y-6">
-              {!(novel.comments?.length) ? (
-                <p className={`text-center py-4 ${t.textMuted}`}>还没有评论，来抢个沙发吧！</p>
-              ) : (
-                novel.comments.sort((a, b) => b.date - a.date).map((comment, idx) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${t.iconBg}`}>{comment.userName.charAt(0).toUpperCase()}</div>
-                    <div className={`flex-1 p-4 rounded-xl rounded-tl-none ${t.commentBg}`}>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className={`font-medium text-sm ${t.text}`}>{comment.userName}</span>
-                        <span className={`text-xs ${t.textLight}`}>{new Date(comment.date).toLocaleString()}</span>
-                      </div>
-                      <p className={`whitespace-pre-wrap text-sm leading-relaxed ${t.text}`}>{comment.text}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+  return (
+    <div className="max-w-4xl mx-auto p-6 mt-10 animate-in fade-in space-y-12">
+      <div className={`p-8 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 ${t.cardStatic}`}>
+        <div className="flex items-center gap-4">
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center font-bold text-3xl ${t.iconBg}`}>{userProfile.name.charAt(0).toUpperCase()}</div>
+          <div>
+            <h2 className={`text-2xl font-bold ${t.heading}`}>个人中心</h2>
+            <p className={`text-sm mt-1 ${t.textMuted}`}>当前绑定 QQ：{userProfile.qq}</p>
           </div>
         </div>
+        <div className="flex w-full md:w-auto gap-2">
+          <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={`px-4 py-2 rounded-lg w-full md:w-48 text-sm ${t.input}`} placeholder="修改昵称" />
+          <Button onClick={() => updateUsername(editName)} variant="secondary">保存</Button>
+        </div>
       </div>
-    );
+
+      <div>
+        <h3 className={`text-xl font-bold mb-6 flex items-center gap-2 ${t.heading}`}><Heart className="text-red-500" /> 我的书架 (收藏)</h3>
+        {myFavNovels.length === 0 ? (
+          <div className={`text-center py-12 rounded-2xl border border-dashed ${theme === 'dark-gold' ? 'border-[#444] bg-[#1a1a1a]' : 'border-gray-200 bg-white'}`}><Heart size={40} className={`mx-auto mb-3 ${t.textLight}`} /><p className={t.textMuted}>当前你并没有收藏任何小说。</p></div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {myFavNovels.map(novel => (
+              <div key={novel.id} className={`p-4 rounded-xl flex justify-between items-center ${t.card}`}>
+                <div className="cursor-pointer flex-1 pr-4" onClick={() => navigate(`/novel/${novel.id}`)}>
+                  <h4 className={`font-bold transition-colors line-clamp-1 ${t.text} hover:${t.accent.split(' ')[0]}`}>{novel.title}</h4>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>{novel.genre} • 作者: {novel.author || novel.uploaderName}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" className="!p-2" onClick={() => downloadTxt(novel)} title="下载"><Download size={18} className={t.textMuted} /></Button>
+                  <Button variant="ghost" className={`!p-2 hover:${t.dangerBtn.split(' ')[0]} bg-opacity-10`} onClick={() => toggleFavorite(novel.id)} title="取消收藏"><Heart size={18} className="text-red-500" fill="currentColor" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className={`text-xl font-bold mb-6 flex items-center gap-2 ${t.heading}`}><Upload className={t.accent} /> 我的上传</h3>
+        {myUploads.length === 0 ? (
+          <div className={`text-center py-12 rounded-2xl border border-dashed ${theme === 'dark-gold' ? 'border-[#444] bg-[#1a1a1a]' : 'border-gray-200 bg-white'}`}><Upload size={40} className={`mx-auto mb-3 ${t.textLight}`} /><p className={t.textMuted}>你还没有发布过任何作品。</p></div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {myUploads.sort((a, b) => b.uploadDate - a.uploadDate).map(novel => (
+              <div key={novel.id} className={`p-4 rounded-xl flex justify-between items-center ${t.card}`}>
+                <div className="cursor-pointer flex-1 pr-4" onClick={() => navigate(`/novel/${novel.id}`)}>
+                  <h4 className={`font-bold transition-colors line-clamp-1 ${t.text} hover:${t.accent.split(' ')[0]}`}>{novel.title}</h4>
+                  <p className={`text-xs mt-1.5 flex gap-3 ${t.textMuted}`}>
+                    <span>字数: {novel.content?.length || 0}</span><span>收藏: {novel.favoritesCount || 0}</span><span>评论: {novel.comments?.length || 0}</span>
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => navigate(`/novel/${novel.id}`)}>阅读</Button>
+                  <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={() => navigate(`/edit/${novel.id}`)} title="编辑内容"><Edit size={14} className="mr-1" /> 编辑</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ReadView = ({ t, Button, novels, userProfile, toggleFavorite, downloadTxt, addTag, upvoteTag, addComment }) => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const novel = novels.find(n => n.id === id);
+
+  if (novels.length === 0) return <div className="text-center py-20">加载中...</div>;
+  if (!novel) return <div className="text-center py-20 text-red-500 font-bold">找不到该小说或已被删除</div>;
+
+  const isFav = userProfile.favorites?.includes(novel.id);
+
+  let prevNovel = null;
+  let nextNovel = null;
+  if (novel.series) {
+    const seriesNovels = novels.filter(n => n.series === novel.series).sort((a, b) => a.uploadDate - b.uploadDate);
+    const currentIndex = seriesNovels.findIndex(n => n.id === novel.id);
+    if (currentIndex > 0) prevNovel = seriesNovels[currentIndex - 1];
+    if (currentIndex < seriesNovels.length - 1) nextNovel = seriesNovels[currentIndex + 1];
+  }
+
+  const handleAddTag = async (e) => {
+    e.preventDefault();
+    await addTag(novel.id, e.target.tag.value);
+    e.target.reset();
   };
 
-  const UploadEditView = () => {
-    const { id } = useParams();
-    const isEditMode = !!id;
+  const handleAddComment = async (e) => {
+    e.preventDefault();
+    await addComment(novel.id, e.target.comment.value);
+    e.target.reset();
+  };
 
-    const [uTitle, setUTitle] = useState('');
-    const [uGenre, setUGenre] = useState('短篇');
-    const [uAuthor, setUAuthor] = useState('');
-    const [uSeries, setUSeries] = useState('');
-    const [uSynopsis, setUSynopsis] = useState('');
-    const [uContent, setUContent] = useState('');
-    const [uFileName, setUFileName] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const isHtml = /<(p|div|br|span|h[1-6]|b|i|strong|em)[^>]*>/i.test(novel.content);
+  let displayContent = novel.content;
+  if (!isHtml) {
+    displayContent = novel.content.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '<div class="h-4"></div>'; 
+      return `<p style="text-indent: 2em; margin-bottom: 0.5em;">${trimmed}</p>`;
+    }).join('');
+  }
 
-    // 如果未登录，重定向到登录页
-    if (!user || !userProfile?.isRegistered) {
-      return <Navigate to="/auth" />;
-    }
+  return (
+    <div className={`min-h-screen ${t.readBg} pt-4 pb-10`}>
+      <div className="max-w-4xl mx-auto p-4 md:p-8 animate-in slide-in-from-bottom-8">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 -ml-4"><ChevronLeft size={20} /> 返回</Button>
 
-    // 初始化表单数据
-    useEffect(() => {
-      if (isEditMode && novels.length > 0) {
-        const novel = novels.find(n => n.id === id);
-        if (novel && novel.uploaderId === user.uid) {
-          setUTitle(novel.title);
-          setUGenre(novel.genre || '短篇');
-          setUAuthor(novel.author || userProfile.name);
-          setUSeries(novel.series || '');
-          setUSynopsis(novel.synopsis || '');
-          setUContent(novel.content);
-        } else if (novel) {
-          showToast("无权编辑他人的作品", "error");
-          navigate('/profile');
-        }
-      } else if (!isEditMode) {
-        setUAuthor(userProfile.name);
-      }
-    }, [isEditMode, id, novels, userProfile, user]);
-
-    const handleFileChange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.size > 1048576) return showToast("文件过大！请上传小于 1MB 的文本文件。", "error");
-      setUFileName(file.name);
-      if (!isEditMode) setUTitle(file.name.replace(/\.[^/.]+$/, ""));
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setUContent(event.target.result);
-        showToast("文件读取成功，可继续编辑排版", "success");
-      };
-      reader.readAsText(file);
-    };
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      if (!uTitle.trim() || !uAuthor.trim() || !uContent.trim()) return showToast("请填写完整的标题、作者及正文内容", "error");
-      setIsSubmitting(true);
-      try {
-        if (isEditMode) {
-          const novelDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'novels', id);
-          await updateDoc(novelDocRef, {
-            title: uTitle.trim(), genre: uGenre, author: uAuthor.trim(), series: uSeries.trim(), synopsis: uSynopsis.trim(), content: uContent
-          });
-          showToast("作品修改保存成功！", "success");
-          navigate('/profile');
-        } else {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'novels'), {
-            title: uTitle.trim(), genre: uGenre, author: uAuthor.trim(), series: uSeries.trim(), synopsis: uSynopsis.trim(), content: uContent,
-            uploadDate: Date.now(), uploaderId: user.uid, uploaderName: userProfile.name, favoritesCount: 0, tags: [], comments: []
-          });
-          showToast("上传发布成功！", "success");
-          navigate('/');
-        }
-      } catch (err) {
-        showToast(isEditMode ? "修改失败" : "上传失败", "error");
-      }
-      setIsSubmitting(false);
-    };
-
-    return (
-      <div className="max-w-4xl mx-auto p-6 mt-6">
-        <div className={`p-8 rounded-2xl animate-in fade-in ${t.cardStatic}`}>
-          <div className={`flex items-center gap-3 mb-8 pb-6 border-b ${t.border}`}>
-            <div className={`p-3 rounded-full ${t.iconBg}`}>{isEditMode ? <Edit size={24} /> : <Upload size={24} />}</div>
-            <div>
-              <h2 className={`text-2xl font-bold ${t.heading}`}>{isEditMode ? "编辑作品" : "发布作品"}</h2>
-              <p className={`text-sm mt-1 ${t.textMuted}`}>{isEditMode ? "修改你已经上传的作品信息与正文内容" : "直接复制文本撰写，或上传 TXT 后二次编辑"}</p>
+        <div className={`p-8 md:p-12 rounded-2xl shadow-sm mb-8 ${t.readPaper}`}>
+          <div className={`text-center mb-10 pb-8 border-b ${t.border}`}>
+            <h1 className={`text-4xl font-black mb-4 tracking-tight ${t.heading}`}>{novel.title}</h1>
+            <div className={`flex flex-wrap items-center justify-center gap-4 text-sm ${t.textMuted}`}>
+              <span className="flex items-center gap-1"><User size={16} /> 作者: {novel.author || novel.uploaderName}</span>
+              {novel.series && <span className={`flex items-center gap-1 font-medium px-2 py-0.5 rounded ${t.iconBg}`}><Layers size={14} /> 系列: {novel.series}</span>}
+              <span className="flex items-center gap-1"><Clock size={16} /> {new Date(novel.uploadDate).toLocaleString()}</span>
+              <span className={`px-3 py-1 rounded-full ${t.secondaryBtn.split(' ')[0]} ${t.text}`}>{novel.genre}</span>
+            </div>
+            <div className="mt-6 flex justify-center gap-4">
+              <Button variant={isFav ? "primary" : "outline"} onClick={() => toggleFavorite(novel.id)} icon={Heart}>{isFav ? "已收藏" : "收藏"}</Button>
+              <Button variant="outline" onClick={() => downloadTxt(novel)} icon={Download}>下载 TXT</Button>
             </div>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${t.text}`}>作品书名 <span className="text-red-500">*</span></label>
-                <input required type="text" value={uTitle} onChange={(e) => setUTitle(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`} placeholder="请输入作品名称" />
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${t.text}`}>作者 <span className="text-red-500">*</span></label>
-                <input required type="text" value={uAuthor} onChange={(e) => setUAuthor(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`} placeholder="文章/小说的原作者" />
-              </div>
+
+          {novel.synopsis && (
+            <div className={`mb-10 p-6 rounded-xl ${t.synopsisBg}`}>
+              <h4 className="font-bold mb-2 flex items-center gap-2"><AlignLeft size={16}/> 内容简介</h4>
+              <p className="text-[0.95rem] leading-relaxed whitespace-pre-wrap">{novel.synopsis}</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${t.text}`}>作品类型</label>
-                <select value={uGenre} onChange={(e) => setUGenre(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`}>
-                  <option>杂谈</option><option>短篇</option><option>连载</option>
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${t.text}`}>所属系列 (可选)</label>
-                <input type="text" value={uSeries} onChange={(e) => setUSeries(e.target.value)} className={`w-full px-4 py-3 rounded-xl ${t.input}`} placeholder="同系列作品会自动生成上下篇跳转" />
-              </div>
+          )}
+
+          <div className={`prose prose-lg max-w-none leading-loose font-serif ${t.readText} prose-p:indent-[2em] ${isHtml ? 'whitespace-pre-wrap' : ''}`} style={{ fontSize: '1.125rem' }} dangerouslySetInnerHTML={{ __html: displayContent }} />
+
+          {novel.series && (prevNovel || nextNovel) && (
+            <div className={`mt-12 pt-8 border-t flex justify-between items-center gap-4 ${t.border}`}>
+              {prevNovel ? (
+                <Button variant="outline" onClick={() => navigate(`/novel/${prevNovel.id}`)} className="flex-1 max-w-[48%] justify-start overflow-hidden">
+                  <ChevronLeft size={18} className="flex-shrink-0" /><span className="truncate">上一篇: {prevNovel.title}</span>
+                </Button>
+              ) : <div className="flex-1"></div>}
+              {nextNovel ? (
+                <Button variant="outline" onClick={() => navigate(`/novel/${nextNovel.id}`)} className="flex-1 max-w-[48%] justify-end overflow-hidden">
+                  <span className="truncate">下一篇: {nextNovel.title}</span><ChevronRight size={18} className="flex-shrink-0" />
+                </Button>
+              ) : <div className="flex-1"></div>}
             </div>
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${t.text}`}>内容简介 (最多 500 字)</label>
-              <textarea maxLength={500} value={uSynopsis} onChange={(e) => setUSynopsis(e.target.value)} className={`w-full px-4 py-3 rounded-xl resize-none mb-1 ${t.input}`} rows="3" placeholder="简明扼要地介绍一下这部作品的情节、背景或亮点..."></textarea>
-              <div className={`text-right text-xs ${t.textLight}`}>{uSynopsis.length} / 500</div>
-            </div>
-            <div className={`p-5 rounded-xl border ${t.border} ${theme === 'dark-gold' ? 'bg-[#1a1a1a]' : 'bg-slate-50/50'}`}>
-              <div className="mb-6">
-                <label className={`block text-sm font-medium mb-2 ${t.text}`}>一键导入 TXT (可选)</label>
-                <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${t.border} ${theme === 'dark-gold' ? 'bg-[#222] hover:bg-[#2a2a2a]' : 'bg-white hover:bg-gray-50'}`}>
-                  <div className="flex flex-col items-center justify-center">
-                    <p className={`mb-1 text-sm font-medium ${t.textMuted}`}>{uFileName ? `已选择：${uFileName} (点此可重新选择)` : "点击或拖拽 TXT 文件到此处覆盖内容"}</p>
-                    {!uFileName && <p className={`text-xs ${t.textLight}`}>上传后内容会自动填入下方输入框</p>}
-                  </div>
-                  <input type="file" className="hidden" accept=".txt" onChange={handleFileChange} />
-                </label>
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${t.text}`}>正文内容 <span className="text-red-500">*</span></label>
-                <textarea required value={uContent} onChange={(e) => setUContent(e.target.value)} className={`w-full px-4 py-3 rounded-xl resize-y min-h-[350px] font-serif leading-relaxed ${t.input}`} placeholder="粘贴/编写正文内容... 支持基础 HTML 标签。"></textarea>
-              </div>
-            </div>
-            <Button type="submit" variant="primary" className="w-full py-4 text-lg mt-4 font-bold" disabled={isSubmitting}>
-              {isSubmitting ? (isEditMode ? "正在保存..." : "正在发布至书架...") : (isEditMode ? "保存修改" : "确认发布")}
-            </Button>
+          )}
+        </div>
+
+        <div className={`p-6 rounded-2xl shadow-sm mb-8 ${t.cardStatic}`}>
+          <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${t.heading}`}><Tag className={t.accent} /> 小说标签</h3>
+          <div className="flex flex-wrap gap-3 mb-4">
+            {(novel.tags || []).map((tag, idx) => (
+              <button key={idx} onClick={() => upvoteTag(novel.id, idx)} className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${t.tag}`}>
+                {tag.text} <span className={`px-1.5 rounded text-xs transition-colors ${t.tagBadge}`}>{tag.upvotes}</span><ThumbsUp size={12} className="opacity-50 group-hover:opacity-100" />
+              </button>
+            ))}
+          </div>
+          <form onSubmit={handleAddTag} className="flex gap-2">
+            <input type="text" name="tag" placeholder="添加新标签..." className={`flex-1 px-4 py-2 rounded-lg text-sm ${t.input}`} />
+            <Button type="submit" variant="secondary">添加</Button>
           </form>
         </div>
-      </div>
-    );
-  };
 
-  const ProfileView = () => {
-    if (!user || !userProfile?.isRegistered) {
-      return <Navigate to="/auth" />;
+        <div className={`p-6 rounded-2xl shadow-sm ${t.cardStatic}`}>
+          <h3 className={`text-lg font-bold mb-6 flex items-center gap-2 ${t.heading}`}><MessageSquare className={t.accent} /> 读者讨论 ({novel.comments?.length || 0})</h3>
+          <form onSubmit={handleAddComment} className="mb-8">
+            <textarea name="comment" rows="3" placeholder="写下你的读后感..." className={`w-full px-4 py-3 rounded-xl mb-3 resize-none ${t.input}`}></textarea>
+            <div className="flex justify-end"><Button type="submit" variant="primary">发布评论</Button></div>
+          </form>
+          <div className="space-y-6">
+            {!(novel.comments?.length) ? (
+              <p className={`text-center py-4 ${t.textMuted}`}>还没有评论，来抢个沙发吧！</p>
+            ) : (
+              novel.comments.sort((a, b) => b.date - a.date).map((comment, idx) => (
+                <div key={idx} className="flex gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${t.iconBg}`}>{comment.userName.charAt(0).toUpperCase()}</div>
+                  <div className={`flex-1 p-4 rounded-xl rounded-tl-none ${t.commentBg}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className={`font-medium text-sm ${t.text}`}>{comment.userName}</span>
+                      <span className={`text-xs ${t.textLight}`}>{new Date(comment.date).toLocaleString()}</span>
+                    </div>
+                    <p className={`whitespace-pre-wrap text-sm leading-relaxed ${t.text}`}>{comment.text}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ======================== 主应用组件 ========================
+
+function NovelAppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState({ name: '访客', favorites: [] });
+  const [novels, setNovels] = useState([]);
+  const [toast, setToast] = useState(null);
+  const [theme, setTheme] = useState('blue-white');
+  
+  // 🔥 新增：统一的身份验证和资料加载状态
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+  
+  const t = themeStyles[theme];
+  const ThemeButton = (props) => <BaseButton {...props} t={t} />;
+
+  const showToast = (message, type = 'info') => setToast({ message, type });
+
+  // 路由变化时回到顶部
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  // Firebase 监听用户基础登录状态
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) {
+        setUserProfile({ name: '访客', favorites: [], isRegistered: false });
+        setIsProfileLoading(false); // 没登录自然不需要加载资料
+      } else {
+        setIsProfileLoading(true); // 发现登录用户，准备去拉取详细资料
+      }
+      setIsAuthLoading(false); // 基础 Auth 验证完成
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 监听公开小说与用户的个人数据库资料
+  useEffect(() => {
+    const novelsRef = collection(db, 'artifacts', appId, 'public', 'data', 'novels');
+    const unsubscribeNovels = onSnapshot(novelsRef, (snapshot) => {
+      setNovels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    let unsubscribeProfile = () => {};
+    if (user) {
+      const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data');
+      unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
+        if (docSnap.exists()) setUserProfile(docSnap.data());
+        setIsProfileLoading(false); // 🔥 资料拉取完毕，关闭加载状态
+      });
     }
 
-    const myFavNovels = novels.filter(n => userProfile.favorites?.includes(n.id));
-    const myUploads = novels.filter(n => n.uploaderId === user.uid);
+    return () => {
+      unsubscribeNovels();
+      unsubscribeProfile();
+    };
+  }, [user]);
 
-    return (
-      <div className="max-w-4xl mx-auto p-6 mt-10 animate-in fade-in space-y-12">
-        <div className={`p-8 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 ${t.cardStatic}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center font-bold text-3xl ${t.iconBg}`}>{userProfile.name.charAt(0).toUpperCase()}</div>
-            <div>
-              <h2 className={`text-2xl font-bold ${t.heading}`}>个人中心</h2>
-              <p className={`text-sm mt-1 ${t.textMuted}`}>当前绑定 QQ：{userProfile.qq}</p>
-            </div>
-          </div>
-          <div className="flex w-full md:w-auto gap-2">
-            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={`px-4 py-2 rounded-lg w-full md:w-48 text-sm ${t.input}`} placeholder="修改昵称" />
-            <Button onClick={() => updateUsername(editName)} variant="secondary">保存</Button>
-          </div>
-        </div>
+  // 计算全局是否仍在加载敏感数据
+  const isLoading = isAuthLoading || isProfileLoading;
 
-        <div>
-          <h3 className={`text-xl font-bold mb-6 flex items-center gap-2 ${t.heading}`}><Heart className="text-red-500" /> 我的书架 (收藏)</h3>
-          {myFavNovels.length === 0 ? (
-            <div className={`text-center py-12 rounded-2xl border border-dashed ${theme === 'dark-gold' ? 'border-[#444] bg-[#1a1a1a]' : 'border-gray-200 bg-white'}`}><Heart size={40} className={`mx-auto mb-3 ${t.textLight}`} /><p className={t.textMuted}>当前你并没有收藏任何小说。</p></div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myFavNovels.map(novel => (
-                <div key={novel.id} className={`p-4 rounded-xl flex justify-between items-center ${t.card}`}>
-                  <div className="cursor-pointer flex-1 pr-4" onClick={() => navigate(`/novel/${novel.id}`)}>
-                    <h4 className={`font-bold transition-colors line-clamp-1 ${t.text} hover:${t.accent.split(' ')[0]}`}>{novel.title}</h4>
-                    <p className={`text-xs mt-1 ${t.textMuted}`}>{novel.genre} • 作者: {novel.author || novel.uploaderName}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" className="!p-2" onClick={() => downloadTxt(novel)} title="下载"><Download size={18} className={t.textMuted} /></Button>
-                    <Button variant="ghost" className={`!p-2 hover:${t.dangerBtn.split(' ')[0]} bg-opacity-10`} onClick={() => toggleFavorite(novel.id)} title="取消收藏"><Heart size={18} className="text-red-500" fill="currentColor" /></Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <h3 className={`text-xl font-bold mb-6 flex items-center gap-2 ${t.heading}`}><Upload className={t.accent} /> 我的上传</h3>
-          {myUploads.length === 0 ? (
-            <div className={`text-center py-12 rounded-2xl border border-dashed ${theme === 'dark-gold' ? 'border-[#444] bg-[#1a1a1a]' : 'border-gray-200 bg-white'}`}><Upload size={40} className={`mx-auto mb-3 ${t.textLight}`} /><p className={t.textMuted}>你还没有发布过任何作品。</p></div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myUploads.sort((a, b) => b.uploadDate - a.uploadDate).map(novel => (
-                <div key={novel.id} className={`p-4 rounded-xl flex justify-between items-center ${t.card}`}>
-                  <div className="cursor-pointer flex-1 pr-4" onClick={() => navigate(`/novel/${novel.id}`)}>
-                    <h4 className={`font-bold transition-colors line-clamp-1 ${t.text} hover:${t.accent.split(' ')[0]}`}>{novel.title}</h4>
-                    <p className={`text-xs mt-1.5 flex gap-3 ${t.textMuted}`}>
-                      <span>字数: {novel.content?.length || 0}</span><span>收藏: {novel.favoritesCount || 0}</span><span>评论: {novel.comments?.length || 0}</span>
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => navigate(`/novel/${novel.id}`)}>阅读</Button>
-                    <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={() => navigate(`/edit/${novel.id}`)} title="编辑内容"><Edit size={14} className="mr-1" /> 编辑</Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  const handleLogout = () => {
+    signOut(auth);
+    showToast("已退出登录", "success");
+    navigate('/');
   };
 
-  // =============== 渲染根结构 ===============
+  const updateUsername = async (newName) => {
+    if (!user || !newName.trim()) return;
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { name: newName });
+      showToast("昵称更新成功！", "success");
+    } catch (err) { showToast("更新失败", "error"); }
+  };
+
+  const toggleFavorite = async (novelId) => {
+    if (!user || !userProfile.isRegistered) return navigate('/auth');
+    try {
+      const isFav = userProfile.favorites?.includes(novelId);
+      const newFavs = isFav ? userProfile.favorites.filter(id => id !== novelId) : [...(userProfile.favorites || []), novelId];
+      await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), { favorites: newFavs });
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'novels', novelId), { favoritesCount: increment(isFav ? -1 : 1) });
+      showToast(isFav ? "已取消收藏" : "收藏成功！", "success");
+    } catch (err) { showToast("操作失败", "error"); }
+  };
+
+  const downloadTxt = (novel) => {
+    try {
+      const blob = new Blob([novel.content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${novel.title}.txt`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast("开始下载...", "success");
+    } catch (err) { showToast("下载失败", "error"); }
+  };
+
+  const addTag = async (novelId, tagText) => {
+    if (!user || !userProfile.isRegistered || !tagText.trim()) return;
+    const novel = novels.find(n => n.id === novelId);
+    if (!novel) return;
+    const existingIdx = novel.tags?.findIndex(t => t.text === tagText);
+    let newTags = [...(novel.tags || [])];
+    if (existingIdx >= 0) newTags[existingIdx].upvotes += 1;
+    else newTags.push({ text: tagText.trim(), upvotes: 1 });
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'novels', novelId), { tags: newTags });
+      showToast("标签添加成功", "success");
+    } catch (err) { showToast("添加标签失败", "error"); }
+  };
+
+  const upvoteTag = async (novelId, tagIndex) => {
+    if (!user || !userProfile.isRegistered) return;
+    const novel = novels.find(n => n.id === novelId);
+    if (!novel) return;
+    let newTags = [...(novel.tags || [])];
+    newTags[tagIndex].upvotes += 1;
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'novels', novelId), { tags: newTags });
+  };
+
+  const addComment = async (novelId, commentText) => {
+    if (!userProfile?.isRegistered) return showToast("请先登录账号后再参与评论！", "error");
+    if (!user || !commentText.trim()) return;
+    const novel = novels.find(n => n.id === novelId);
+    if (!novel) return;
+    const newComment = { userId: user.uid, userName: userProfile.name, text: commentText.trim(), date: Date.now() };
+    let newComments = [...(novel.comments || []), newComment];
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'novels', novelId), { comments: newComments });
+      showToast("评论发布成功", "success");
+    } catch (err) { showToast("发布评论失败", "error"); }
+  };
 
   const isActive = (path) => location.pathname === path;
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-200 ${t.app}`}>
-      {/* 顶部导航栏，改用 React Router 的 Navigate 进行跳转 */}
       <nav className={`sticky top-0 z-40 transition-colors duration-200 ${t.nav}`}>
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex justify-between h-16">
@@ -865,13 +867,20 @@ function NovelAppContent() {
               <button onClick={() => setTheme(theme === 'blue-white' ? 'dark-gold' : 'blue-white')} className={`p-2 rounded-lg font-medium text-sm transition-colors ${t.navItem}`} title="切换主题">
                 {theme === 'blue-white' ? '🌙' : '☀️'}
               </button>
+              
               <div className={`w-px h-6 mx-1 md:mx-2 ${t.navDivider}`}></div>
               
               <button onClick={() => navigate('/')} className={`p-2 md:px-4 md:py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 ${isActive('/') ? t.navItemActive : t.navItem}`}>
                 <Home size={18} /> <span className="hidden md:inline">首页</span>
               </button>
 
-              {user && userProfile.isRegistered ? (
+              {/* 🔥 根据加载状态平滑渲染导航栏 */}
+              {isLoading ? (
+                <>
+                  <div className={`w-px h-6 mx-1 md:mx-2 ${t.navDivider}`}></div>
+                  <span className={`p-2 md:px-4 md:py-2 text-sm ${t.textMuted}`}>状态检查中...</span>
+                </>
+              ) : user && userProfile.isRegistered ? (
                 <>
                   <button onClick={() => navigate('/upload')} className={`p-2 md:px-4 md:py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 ${isActive('/upload') || location.pathname.startsWith('/edit/') ? t.navItemActive : t.navItem}`}>
                     <Upload size={18} /> <span className="hidden md:inline">发布</span>
@@ -897,16 +906,19 @@ function NovelAppContent() {
         </div>
       </nav>
 
-      {/* 核心路由区域 */}
       <main className="pb-20">
         <Routes>
-          <Route path="/" element={<HomeView />} />
-          <Route path="/auth" element={<AuthView />} />
-          <Route path="/profile" element={<ProfileView />} />
-          <Route path="/upload" element={<UploadEditView />} />
-          <Route path="/edit/:id" element={<UploadEditView />} />
-          <Route path="/novel/:id" element={<ReadView />} />
-          <Route path="*" element={<Navigate to="/" />} /> {/* 404 处理重定向回首页 */}
+          <Route path="/" element={<HomeView t={t} Button={ThemeButton} novels={novels} userProfile={userProfile} toggleFavorite={toggleFavorite} />} />
+          
+          <Route path="/auth" element={<AuthView t={t} Button={ThemeButton} showToast={showToast} user={user} isLoading={isLoading} />} />
+          
+          {/* 给受保护的路由传入 isLoading，让它们等待数据 */}
+          <Route path="/profile" element={<ProfileView t={t} theme={theme} Button={ThemeButton} user={user} userProfile={userProfile} novels={novels} updateUsername={updateUsername} downloadTxt={downloadTxt} toggleFavorite={toggleFavorite} isLoading={isLoading} />} />
+          <Route path="/upload" element={<UploadEditView t={t} theme={theme} Button={ThemeButton} showToast={showToast} user={user} userProfile={userProfile} novels={novels} isLoading={isLoading} />} />
+          <Route path="/edit/:id" element={<UploadEditView t={t} theme={theme} Button={ThemeButton} showToast={showToast} user={user} userProfile={userProfile} novels={novels} isLoading={isLoading} />} />
+          
+          <Route path="/novel/:id" element={<ReadView t={t} Button={ThemeButton} novels={novels} userProfile={userProfile} toggleFavorite={toggleFavorite} downloadTxt={downloadTxt} addTag={addTag} upvoteTag={upvoteTag} addComment={addComment} />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
 
@@ -915,7 +927,6 @@ function NovelAppContent() {
   );
 }
 
-// 用 BrowserRouter 包裹入口
 export default function App() {
   return (
     <BrowserRouter>
